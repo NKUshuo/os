@@ -12,7 +12,6 @@ list_entry_t pra_list_head;
 static int
 _lru_init_mm(struct mm_struct *mm)
 {     
-    
     // 初始化
     list_init(&pra_list_head);
     // 将mm的私有成员指针指向pra_list_head，用于后续的页面替换算法操作
@@ -55,12 +54,12 @@ _lru_swap_out_victim(struct mm_struct *mm, struct Page **ptr_page, int in_tick)
         return 0;
     }
 
-    uint_t max_visited = 0;
+    uint_t min_visited = 4294967295;
     while (entry != &pra_list_head) {
         struct Page *page = le2page(entry, pra_page_link);
-        if (page->visited >= max_visited) {
+        if (page->visited <= min_visited) {
             victim = page;
-            max_visited = page->visited;
+            min_visited = page->visited;
         }
         entry = list_next(entry);
     }

@@ -40,8 +40,7 @@ swap_init(void)
         max_swap_offset < MAX_SWAP_OFFSET_LIMIT)) {
         panic("bad max_swap_offset %08x.\n", max_swap_offset);
      }
-
-     sm = &swap_manager_clock;// 切换sm
+     sm = &swap_manager_lru;// 切换sm
      int r = sm->init();
      
      if (r == 0)
@@ -75,8 +74,8 @@ swap_tick_event(struct mm_struct *mm)
                list_entry_t *head=(list_entry_t*) mm->sm_priv;
                list_entry_t *cur;
                if(head != NULL){
-                    cur = head;
-                    if (cur == NULL) {
+                    cur = list_next(head);
+                    while (cur != head) {
                          struct Page *cur_page = le2page(cur, pra_page_link);
                          cur_page->visited = cur_page->visited >> 1;
                          cur = list_next(cur);
