@@ -29,9 +29,9 @@ struct vma_struct {
 // the control struct for a set of vma using the same PDT
 struct mm_struct {
     list_entry_t mmap_list;        // linear list link which sorted by start addr of vma
-    struct vma_struct *mmap_cache; // current accessed vma, used for speed purpose
+    struct vma_struct *mmap_cache; // current accessed vma, used for speed purpose// 缓存
     pde_t *pgdir;                  // the PDT of these vma
-    int map_count;                 // the count of these vma
+    int map_count;                 // the count of these vma// 数量
     void *sm_priv;                   // the private data for swap manager
 };
 

@@ -2,12 +2,14 @@
 #include <swapfs.h>
 #include <swap_fifo.h>
 #include <swap_clock.h>
+#include <swap_lru.h>
 #include <stdio.h>
 #include <string.h>
 #include <memlayout.h>
 #include <pmm.h>
 #include <mmu.h>
 
+//四个物理页，五个虚拟页，有一个会用来交换
 // the valid vaddr for check is between 0~CHECK_VALID_VADDR-1
 #define CHECK_VALID_VIR_PAGE_NUM 5
 #define BEING_CHECK_VALID_VADDR 0X1000
@@ -31,20 +33,20 @@ static void check_swap(void);
 int
 swap_init(void)
 {
-     swapfs_init();
+     swapfs_init();// 初始化硬盘和一些检查
 
-     // Since the IDE is faked, it can only store 7 pages at most to pass the test
+     // Since the IDE is faked, it can only store 7 pages at most to pass the test// 56/8
      if (!(7 <= max_swap_offset &&
         max_swap_offset < MAX_SWAP_OFFSET_LIMIT)) {
         panic("bad max_swap_offset %08x.\n", max_swap_offset);
      }
 
-     sm = &swap_manager_clock;//use first in first out Page Replacement Algorithm
+     sm = &swap_manager_clock;// 切换sm
      int r = sm->init();
      
      if (r == 0)
      {
-          swap_init_ok = 1;
+          swap_init_ok = 1;// 初始化成功
           cprintf("SWAP: manager = %s\n", sm->name);
           check_swap();
      }
@@ -58,9 +60,32 @@ swap_init_mm(struct mm_struct *mm)
      return sm->init_mm(mm);
 }
 
+static uint64_t last_trigger_time = 0;
+static uint64_t trigger_interval = 5; // 触发间隔不知道设置为多少
+
 int
 swap_tick_event(struct mm_struct *mm)
-{
+{// 每隔一段时间将所有visited标志右移一位。
+     if(sm->name == "lru swap manager"){// 如果是lru算法
+          uint64_t current_time = get_current_time(); // 获取当前时间
+
+          if (current_time - last_trigger_time >= trigger_interval) {
+               // 检查是否满足触发条件
+               // 执行需要触发的操作
+               list_entry_t *head=(list_entry_t*) mm->sm_priv;
+               list_entry_t *cur;
+               if(head != NULL){
+                    cur = head;
+                    if (cur == NULL) {
+                         struct Page *cur_page = le2page(cur, pra_page_link);
+                         cur_page->visited = cur_page->visited >> 1;
+                         cur = list_next(cur);
+                    }
+               }
+               // 更新上次触发时间
+               last_trigger_time = current_time;
+          }
+     }
      return sm->tick_event(mm);
 }
 

@@ -51,7 +51,7 @@ void print_mm(char *name, struct mm_struct *mm){
 	for(int i=0;i<mm->map_count;i++){
 		list = list_next(list);
 		print_vma(name, le2vma(list,list_link));
-	}
+	}// 打印所有vma
 }
 
 static void check_vmm(void);
@@ -63,7 +63,7 @@ struct mm_struct *
 mm_create(void) {
     struct mm_struct *mm = kmalloc(sizeof(struct mm_struct));
 
-    if (mm != NULL) {
+    if (mm != NULL) {// 初始化
         list_init(&(mm->mmap_list));
         mm->mmap_cache = NULL;
         mm->pgdir = NULL;
@@ -91,7 +91,7 @@ vma_create(uintptr_t vm_start, uintptr_t vm_end, uint_t vm_flags) {
 
 // find_vma - find a vma  (vma->vm_start <= addr <= vma_vm_end)
 struct vma_struct *
-find_vma(struct mm_struct *mm, uintptr_t addr) {
+find_vma(struct mm_struct *mm, uintptr_t addr) {// 通过比较addr与vma的start地址大小，找到addr所在的vma
     struct vma_struct *vma = NULL;
     if (mm != NULL) {
         vma = mm->mmap_cache;
@@ -119,7 +119,7 @@ find_vma(struct mm_struct *mm, uintptr_t addr) {
 
 // check_vma_overlap - check if vma1 overlaps vma2 ?
 static inline void
-check_vma_overlap(struct vma_struct *prev, struct vma_struct *next) {
+check_vma_overlap(struct vma_struct *prev, struct vma_struct *next) {// 检查是否覆盖
     assert(prev->vm_start < prev->vm_end);
     assert(prev->vm_end <= next->vm_start);
     assert(next->vm_start < next->vm_end);
@@ -128,7 +128,7 @@ check_vma_overlap(struct vma_struct *prev, struct vma_struct *next) {
 
 // insert_vma_struct -insert vma in mm's list link
 void
-insert_vma_struct(struct mm_struct *mm, struct vma_struct *vma) {
+insert_vma_struct(struct mm_struct *mm, struct vma_struct *vma) {// 插入vma
     assert(vma->vm_start < vma->vm_end);
     list_entry_t *list = &(mm->mmap_list);
     list_entry_t *le_prev = list, *le_next;
@@ -136,7 +136,7 @@ insert_vma_struct(struct mm_struct *mm, struct vma_struct *vma) {
         list_entry_t *le = list;
         while ((le = list_next(le)) != list) {
             struct vma_struct *mmap_prev = le2vma(le, list_link);
-            if (mmap_prev->vm_start > vma->vm_start) {
+            if (mmap_prev->vm_start > vma->vm_start) {// 比较vma的start地址，按地址排序
                 break;
             }
             le_prev = le;
@@ -348,9 +348,9 @@ do_pgfault(struct mm_struct *mm, uint_t error_code, uintptr_t addr) {
      */
     uint32_t perm = PTE_U;
     if (vma->vm_flags & VM_WRITE) {
-        perm |= (PTE_R | PTE_W);
+        perm |= (PTE_R | PTE_W);// 可写那就可读
     }
-    addr = ROUNDDOWN(addr, PGSIZE);
+    addr = ROUNDDOWN(addr, PGSIZE);// 取整对齐
 
     ret = -E_NO_MEM;
 
@@ -406,7 +406,15 @@ do_pgfault(struct mm_struct *mm, uint_t error_code, uintptr_t addr) {
             //map of phy addr <--->
             //logical addr
             //(3) make the page swappable.
-            page->pra_vaddr = addr;
+            
+            ret = swap_in(mm, addr, &page);// 将addr对应的在磁盘上的数据换到page上
+            if(ret!=0){
+                cprintf("swap_in failed\n");
+                goto failed;
+            }
+            page_insert(mm->pgdir, page, addr, perm);// 建立索引：addr到page的映射关系，设置page的权限为perm
+            swap_map_swappable(mm, addr, page, 1);// 标记为可替换
+            //page->pra_vaddr = addr;
         } else {
             cprintf("no swap_init_ok but ptep is %x, failed\n", *ptep);
             goto failed;
