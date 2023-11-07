@@ -38,12 +38,12 @@ struct pushregs {
     uintptr_t t6;    // Temporary
 };
 
-struct trapframe {
-    struct pushregs gpr;
-    uintptr_t status;
-    uintptr_t epc;
-    uintptr_t badvaddr;
-    uintptr_t cause;
+struct trapframe {// 用于保存和表示一个中断或异常发生时的处理状态
+    struct pushregs gpr;// 通用寄存器的值
+    uintptr_t status;// 保存处理状态寄存器
+    uintptr_t epc;// 保存异常程序计数器
+    uintptr_t badvaddr;// 保存异常的虚拟地址
+    uintptr_t cause;// 用于保存异常的原因或中断号
 };
 
 void trap(struct trapframe *tf);

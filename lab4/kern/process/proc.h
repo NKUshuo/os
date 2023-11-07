@@ -15,7 +15,7 @@ enum proc_state {
     PROC_ZOMBIE,      // almost dead, and wait parent proc to reclaim his resource
 };
 
-struct context {
+struct context {// 用于进程或线程的上下文切换
     uintptr_t ra;
     uintptr_t sp;
     uintptr_t s0;

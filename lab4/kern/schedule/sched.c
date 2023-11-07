@@ -12,6 +12,7 @@ wakeup_proc(struct proc_struct *proc) {
 
 void
 schedule(void) {
+    cprintf("schedule begin! \n");
     bool intr_flag;
     list_entry_t *le, *last;
     struct proc_struct *next = NULL;
@@ -33,6 +34,7 @@ schedule(void) {
         }
         next->runs ++;
         if (next != current) {
+            cprintf("schedule next pid is : %d! \n", next->pid);
             proc_run(next);
         }
     }

@@ -319,6 +319,7 @@ volatile unsigned int pgfault_num=0;
  */
 int
 do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
+    cprintf("THIS MY:do_pgfault begin, addr = %x !\n", addr);
     int ret = -E_INVAL;
     //try to find a vma which include addr
     struct vma_struct *vma = find_vma(mm, addr);
@@ -326,10 +327,10 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
     pgfault_num++;
     //If the addr is in the range of a mm's vma?
     if (vma == NULL || vma->vm_start > addr) {
-        cprintf("not valid addr %x, and  can not find it in vma\n", addr);
+        cprintf("not valid addr %x, and  can not find it in vma\n", addr);// 为什么没有找到
         goto failed;
     }
-
+    cprintf("THIS MY:do_pgfault find !\n");
     /* IF (write an existed addr ) OR
      *    (write an non_existed addr && addr is writable) OR
      *    (read  an non_existed addr && addr is readable)
