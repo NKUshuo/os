@@ -19,6 +19,12 @@ introduction:
   ucore implements a simple process/thread mechanism. process contains the independent memory sapce, at least one threads
 for execution, the kernel data(for management), processor state (for context switch), files(in lab6), etc. ucore needs to
 manage all these details efficiently. In ucore, a thread is just a special kind of process(share process's memory).
+-------------进程/线程机制设计与实现-------------
+（简化的 Linux 进程/线程机制）
+介绍：
+  UCore实现了一个简单的进程/线程机制。进程包含独立的内存 SAPCE、至少一个用于执行的线程、内核数据（用于管理）、处理器状态（用于上下文切换）、文件（在 Lab6 中）等。
+在ucore中，线程只是一种特殊的进程（共享进程的内存）。
+
 ------------------------------
 process state       :     meaning               -- reason
     PROC_UNINIT     :   uninitialized           -- alloc_proc
@@ -57,6 +63,16 @@ SYS_kill        : kill process                            -->do_kill-->proc->fla
                                                                  -->wakeup_proc-->do_wait-->do_exit   
 SYS_getpid      : get the process's pid
 
+
+进程的相关系统调用：
+SYS_exit：进程退出，-->do_exit
+SYS_fork：创建子进程，dup mm -->do_fork-->wakeup_proc
+SYS_wait：等待进程-->do_wait
+SYS_exec：fork 后，进程执行程序 -->加载程序并刷新 mm
+SYS_clone：创建子线程 -->do_fork-->wakeup_proc
+SYS_yield ： 进程标志本身需要重新调度， -- proc->need_sched=1，那么调度器将重新调度这个进程
+SYS_sleep：进程休眠 -->do_sleep
+SYS_kill：终止进程 -->do_kill-->proc->flags |= PF_EXITING
 */
 
 // the process set's list
@@ -110,6 +126,36 @@ alloc_proc(void) {
      *       uint32_t wait_state;                        // waiting state
      *       struct proc_struct *cptr, *yptr, *optr;     // relations between processes
      */
+        // 初始化进程状态为 PROC_UNINIT，设置进程为“初始”态
+        proc->state = PROC_UNINIT;
+        // 初始化进程 ID 为 -1，设置进程pid的未初始化值
+        proc->pid = -1;
+        // 初始化运行次数为 0
+        proc->runs = 0;
+        // 初始化内核栈指针为 0
+        proc->kstack = 0;
+        // 初始化是否需要重新调度为 false
+        proc->need_resched = 0;
+        // 初始化父进程指针为 NULL
+        proc->parent = NULL;
+        // 初始化内存管理结构为 NULL
+        proc->mm = NULL;
+        // 初始化上下文结构
+        memset(&proc->context, 0, sizeof(struct context));
+        // 初始化中断帧指针为 NULL
+        proc->tf = NULL;
+        // 初始化 CR3 寄存器值为 boot_cr3?
+        proc->cr3 = boot_cr3;
+        // 初始化进程标志位为 0
+        proc->flags = 0;
+        // 初始化进程名字为空字符串，set_proc_name中以实现
+        memset(proc->name, 0, PROC_NAME_LEN);
+
+
+        // 初始化等待状态为 0
+        proc->wait_state = 0;
+        // 初始化子进程指针、兄弟进程指针、前一个进程指针均为 NULL
+        proc->cptr = proc->yptr = proc->optr = NULL;
     }
     return proc;
 }
@@ -196,17 +242,34 @@ get_pid(void) {
 // NOTE: before call switch_to, should load  base addr of "proc"'s new PDT
 void
 proc_run(struct proc_struct *proc) {
-    if (proc != current) {
-        // LAB4:EXERCISE3 YOUR CODE
-        /*
-        * Some Useful MACROs, Functions and DEFINEs, you can use them in below implementation.
-        * MACROs or Functions:
-        *   local_intr_save():        Disable interrupts
-        *   local_intr_restore():     Enable Interrupts
-        *   lcr3():                   Modify the value of CR3 register
-        *   switch_to():              Context switching between two processes
-        */
+    // if (proc != current) {
+    //     // LAB4:EXERCISE3 YOUR CODE
+    //     /*
+    //     * Some Useful MACROs, Functions and DEFINEs, you can use them in below implementation.
+    //     * MACROs or Functions:
+    //     *   local_intr_save():        Disable interrupts
+    //     *   local_intr_restore():     Enable Interrupts
+    //     *   lcr3():                   Modify the value of CR3 register
+    //     *   switch_to():              Context switching between two processes
+    //     */
 
+    // }
+    // 只有当proc不是当前执行的线程时，才需要执行
+    if (proc != current) {
+        bool intr_flag;
+        struct proc_struct *prev = current, *next = proc;
+
+        // 切换时新线程任务时需要暂时关闭中断，避免出现嵌套中断
+        local_intr_save(intr_flag);
+        {
+            current = proc;
+            // 设置cr3寄存器的值，令其指向新线程的页表
+            lcr3(next->cr3);
+            // switch_to用于完整的进程上下文切换，定义在统一目录下的switch.S中
+            // 由于涉及到大量的寄存器的存取操作，因此使用汇编实现
+            switch_to(&(prev->context), &(next->context));
+        }
+        local_intr_restore(intr_flag);
     }
 }
 
@@ -403,6 +466,78 @@ do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf) {
     *    update step 1: set child proc's parent to current process, make sure current process's wait_state is 0
     *    update step 5: insert proc_struct into hash_list && proc_list, set the relation links of process
     */
+
+
+    // 将子进程的父进程设置为当前进程，确保当前进程的wait_state为 0
+    // 分配并初始化内核栈（setup_stack函数）
+    // 根据clone_flags决定是复制还是共享内存管理系统（copy_mm函数）
+    // 设置进程的中断帧和上下文（copy_thread函数）
+    // 在hash_list&&proc_list中插入proc_struct，设置流程的关系链接
+    // 将新建的进程设为就绪态
+    // 将返回值设为线程id
+    
+    // Step 1: Call alloc_proc to allocate a proc_struct
+    // if ((proc = alloc_proc()) == NULL) {
+    //     goto bad_fork_cleanup_proc;
+    // }
+
+    // update step 1: set child proc's parent to current process, make sure current process's wait_state is 0
+    if ((proc = alloc_proc()) == NULL) {
+        goto bad_fork_cleanup_proc;
+    }
+    proc->parent = current;
+    current->wait_state = 0;
+
+
+    // Step 2: Call setup_kstack to allocate a kernel stack for the child process
+    if (setup_kstack(proc) != 0) {
+        goto bad_fork_cleanup_kstack;
+    }
+
+    // Step 3: Call copy_mm to duplicate or share memory management
+    if (copy_mm(clone_flags, proc) != 0) {// 本实验没有用
+        goto bad_fork_cleanup_kstack;
+    }
+
+    // Step 4: Call copy_thread to set up the trapframe and context
+    copy_thread(proc, stack, tf);
+
+    // Step 5: Call hash_proc to add the child process to the hash list
+    // bool intr_flag;
+    // local_intr_save(intr_flag);
+    // {
+    //     // 生成并设置新的pid
+    //     proc->pid = get_pid();
+    //     // 把proc加入全局线程控制块哈希表
+    //     hash_proc(proc);
+    //     // 把proc加入全局线程控制块双向链表
+    //     list_add(&proc_list, &(proc->list_link));
+    //     nr_process ++;
+    // }
+    // local_intr_restore(intr_flag);
+
+    // update step 5: insert proc_struct into hash_list && proc_list, set the relation links of process
+    bool intr_flag;
+    local_intr_save(intr_flag);
+    {
+        // 生成并设置新的pid
+        proc->pid = get_pid();
+        // 把proc加入全局线程控制块哈希表
+        hash_proc(proc);
+        // 把proc加入全局线程控制块双向链表
+        list_add(&proc_list, &(proc->list_link));
+        nr_process ++;
+    }
+    set_links(proc);
+    local_intr_restore(intr_flag);
+
+    // Step 6: Call wakeup_proc to mark the new child process as RUNNABLE
+    wakeup_proc(proc);// PROC_RUNNABLE
+
+    // Step 7: Set the return value using the child process's PID
+    cprintf("THIS MY: do_fork proc create over thread: %d! isNULL:%d \n", proc->pid, proc == NULL);
+    ret = proc->pid;
+    goto fork_out;
  
 fork_out:
     return ret;
@@ -473,7 +608,7 @@ do_exit(int error_code) {
  * @size:  the size of the content of binary program
  */
 static int
-load_icode(unsigned char *binary, size_t size) {
+load_icode(unsigned char *binary, size_t size) {// 起始地址和大小
     if (current->mm != NULL) {
         panic("load_icode: current->mm must be empty.\n");
     }
@@ -603,6 +738,13 @@ load_icode(unsigned char *binary, size_t size) {
      *          tf->status should be appropriate for user program (the value of sstatus)
      *          hint: check meaning of SPP, SPIE in SSTATUS, use them by SSTATUS_SPP, SSTATUS_SPIE(defined in risv.h)
      */
+
+    // Set user stack top
+    tf->gpr.sp = USTACKTOP;
+    // Set entry point of user program
+    tf->epc = elf->e_entry;
+    // Set status register appropriately
+    tf->status = (sstatus & ~SSTATUS_SPP) | SSTATUS_SPIE;
 
 
     ret = 0;
@@ -865,4 +1007,3 @@ cpu_idle(void) {
         }
     }
 }
-
