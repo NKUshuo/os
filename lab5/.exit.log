@@ -23,7 +23,7 @@ PMP1: 0x0000000000000000-0xffffffffffffffff (A,R,W,X)
 
 Special kernel symbols:
   entry  0xc0200036 (virtual)
-  etext  0xc0206612 (virtual)
+  etext  0xc0206650 (virtual)
   edata  0xc02a0fa8 (virtual)
   end    0xc02ac538 (virtual)
 Kernel executable memory footprint: 690KB
@@ -91,5 +91,26 @@ page fault at 0x00005000: K/W
 swap_out: i 0, store page in vaddr 0x2000 to disk swap entry 3
 swap_in: load disk swap entry 6 with swap_page in vadr 0x5000
 write Virt Page a in fifo_check_swap
-kernel panic at kern/mm/swap_fifo.c:113:
-    assertion failed: *(unsigned char *)0x1000 == 0x0a
+check_swap() succeeded!
+++ setup timer interrupts
+THIS MY: do_fork proc create over thread: 2! isNULL:0 
+kernel_execve: pid = 2, name = "exit".
+Breakpoint
+I am the parent. Forking the child...
+alloc a new page 0xc04c3000
+alloc a new page 0xc04c4000
+alloc a new page 0xc04c5000
+alloc a new page 0xc04c6000
+alloc a new page 0xc04c9000
+alloc a new page 0xc04ca000
+THIS MY: do_fork proc create over thread: 3! isNULL:0 
+I am parent, fork a child pid 3
+I am the parent, waiting now..
+I am the child.
+waitpid 3 ok.
+exit pass.
+all user-mode processes have quit.
+init check memory pass.
+kernel panic at kern/process/proc.c:575:
+    initproc exit.
+
